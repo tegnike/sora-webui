@@ -38,7 +38,56 @@ export default function Home() {
     }
   };
 
-  // 画像と解像度の整合性チェック
+  // 画像を指定サイズにリサイズする関数
+  const resizeImage = (file: File, targetSize: string): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const [targetWidth, targetHeight] = targetSize.split('x').map(Number);
+
+        // すでに一致している場合はそのまま返す
+        if (img.width === targetWidth && img.height === targetHeight) {
+          resolve(file);
+          return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Canvas context not available'));
+          return;
+        }
+
+        // アスペクト比を保ってトリミング
+        const scale = Math.max(targetWidth / img.width, targetHeight / img.height);
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        const x = (targetWidth - scaledWidth) / 2;
+        const y = (targetHeight - scaledHeight) / 2;
+
+        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const resizedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(resizedFile);
+          } else {
+            reject(new Error('Failed to create blob'));
+          }
+        }, 'image/jpeg', 0.95);
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // 画像と解像度の整合性チェックと自動リサイズ
   useEffect(() => {
     if (!imageFile) {
       setError('');
@@ -46,12 +95,16 @@ export default function Home() {
     }
 
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const [width, height] = size.split('x').map(Number);
       if (img.width !== width || img.height !== height) {
-        setError(
-          `⚠️ 画像の解像度（${img.width}x${img.height}）が選択した動画サイズ（${size}）と一致しません。Sora2 APIでは、参照画像の解像度と動画サイズが一致している必要があります。`
-        );
+        try {
+          const resizedFile = await resizeImage(imageFile, size);
+          setImageFile(resizedFile);
+          setError('');
+        } catch (err) {
+          setError('画像のリサイズに失敗しました');
+        }
       } else {
         setError('');
       }
