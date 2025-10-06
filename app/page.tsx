@@ -21,6 +21,23 @@ export default function Home() {
     ? ['1792x1024', '1024x1792', '1280x720', '720x1280']
     : ['1280x720', '720x1280'];
 
+  // 料金計算（秒単位）
+  const calculatePrice = () => {
+    if (model === 'sora-2') {
+      return 0.10;
+    } else if (model === 'sora-2-pro') {
+      if (size === '1792x1024' || size === '1024x1792') {
+        return 0.50;
+      } else {
+        return 0.30;
+      }
+    }
+    return 0;
+  };
+
+  const pricePerSecond = calculatePrice();
+  const estimatedCost = (pricePerSecond * seconds).toFixed(2);
+
   // 経過時間を1秒ごとに更新
   useEffect(() => {
     if (!loading) return;
@@ -327,6 +344,20 @@ export default function Home() {
                 <option value={8}>8秒</option>
                 <option value={12}>12秒</option>
               </select>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium text-gray-700">推定コスト</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    ${pricePerSecond}/秒 × {seconds}秒
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-bold text-blue-600">${estimatedCost}</span>
+                </div>
+              </div>
             </div>
 
             <button
