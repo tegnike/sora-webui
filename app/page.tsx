@@ -134,17 +134,7 @@ export default function Home() {
   }, [imageFile, size]);
 
   const pollStatus = async (videoId: string, key: string) => {
-    const maxAttempts = 60;
-    let attempts = 0;
-
     const poll = async (): Promise<void> => {
-
-      if (attempts >= maxAttempts) {
-        setError('タイムアウトしました');
-        setLoading(false);
-        return;
-      }
-
       try {
         const res = await fetch(
           `/api/status?videoId=${videoId}&apiKey=${encodeURIComponent(key)}`
@@ -158,7 +148,6 @@ export default function Home() {
           setError(status.error?.message || '動画生成に失敗しました');
           setLoading(false);
         } else {
-          attempts++;
           setTimeout(poll, 3000);
         }
       } catch (err: any) {
