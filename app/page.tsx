@@ -38,6 +38,31 @@ export default function Home() {
     }
   };
 
+  // 画像と解像度の整合性チェック
+  useEffect(() => {
+    if (!imageFile) {
+      setError('');
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const [width, height] = size.split('x').map(Number);
+      if (img.width !== width || img.height !== height) {
+        setError(
+          `⚠️ 画像の解像度（${img.width}x${img.height}）が選択した動画サイズ（${size}）と一致しません。Sora2 APIでは、参照画像の解像度と動画サイズが一致している必要があります。`
+        );
+      } else {
+        setError('');
+      }
+    };
+    img.src = URL.createObjectURL(imageFile);
+
+    return () => {
+      URL.revokeObjectURL(img.src);
+    };
+  }, [imageFile, size]);
+
   const pollStatus = async (videoId: string, key: string) => {
     const maxAttempts = 60;
     let attempts = 0;
@@ -77,7 +102,12 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+
+    // エラーがある場合は送信しない
+    if (error) {
+      return;
+    }
+
     setVideoStatus(null);
     setVideoId('');
     setElapsedSeconds(0);

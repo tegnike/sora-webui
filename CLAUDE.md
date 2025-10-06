@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sora2 | Video Generator WebUI - OpenAI Sora APIを使用した動画生成Webアプリケーション
+Sora2 | Video Generator WebUI - OpenAI Sora2 APIを使用した動画生成Webアプリケーション
 
 **Tech Stack:**
 - Next.js 15 (App Router)
@@ -36,9 +36,9 @@ npm run lint         # Run Next.js linter
   - `app/api/status/route.ts` - Video status polling endpoint
   - `app/api/download/route.ts` - Video download endpoint
 - `lib/` - Shared utilities
-  - `lib/sora.ts` - Sora API client wrapper functions
+  - `lib/sora.ts` - Sora2 API client wrapper functions
 - `types/` - TypeScript type definitions
-  - `types/sora.ts` - Sora API types (`VideoGenerationRequest`, `VideoStatus`, etc.)
+  - `types/sora.ts` - Sora2 API types (`VideoGenerationRequest`, `VideoStatus`, etc.)
 
 ### API Flow
 
@@ -58,6 +58,6 @@ APIキーは以下のいずれかから取得:
 
 ## Development Notes
 
-- Sora APIは公式OpenAI SDKの`client.videos.create()`を使用
+- Sora2 APIは公式OpenAI SDKの`client.videos.create()`を使用
 - 画像参照機能は`input_reference`パラメータで実装
 - モデル選択: `sora-2`（高速）または`sora-2-pro`（高品質）

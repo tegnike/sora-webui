@@ -1,7 +1,7 @@
 Video generation with Sora
 ==========================
 
-Create, iterate on, and manage videos with the Sora API.
+Create, iterate on, and manage videos with the Sora2 API.
 
 Overview
 --------
