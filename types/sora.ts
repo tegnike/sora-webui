@@ -18,7 +18,3 @@ export interface VideoStatus {
     message: string;
   };
 }
-
-export interface GenerateResponse {
-  videoId: string;
-}

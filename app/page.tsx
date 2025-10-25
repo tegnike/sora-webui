@@ -16,6 +16,9 @@ export default function Home() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState('');
 
+  // OpenAI REST endpoint base URL (client-side direct access)
+  const VIDEO_API_BASE = 'https://api.openai.com/v1/videos';
+
   // モデルに応じた利用可能なサイズ
   const availableSizes = model === 'sora-2-pro'
     ? ['1792x1024', '1024x1792', '1280x720', '720x1280']
@@ -136,10 +139,23 @@ export default function Home() {
   const pollStatus = async (videoId: string, key: string) => {
     const poll = async (): Promise<void> => {
       try {
-        const res = await fetch(
-          `/api/status?videoId=${videoId}&apiKey=${encodeURIComponent(key)}`
-        );
-        const status: VideoStatus = await res.json();
+        const res = await fetch(`${VIDEO_API_BASE}/${videoId}`, {
+          headers: {
+            Authorization: `Bearer ${key}`,
+          },
+        });
+        const data = await res
+          .json()
+          .catch(() => ({ error: { message: 'ステータス情報の解析に失敗しました' } }));
+
+        if (!res.ok) {
+          const message =
+            (data as any)?.error?.message ||
+            `ステータス取得に失敗しました (${res.status})`;
+          throw new Error(message);
+        }
+
+        const status = data as VideoStatus;
         setVideoStatus(status);
 
         if (status.status === 'completed') {
@@ -167,6 +183,12 @@ export default function Home() {
       return;
     }
 
+    if (!apiKey) {
+      setError('APIキーを入力してください');
+      return;
+    }
+
+    setError('');
     setVideoStatus(null);
     setVideoId('');
     setElapsedSeconds(0);
@@ -179,30 +201,82 @@ export default function Home() {
       formData.append('size', size);
       formData.append('seconds', seconds.toString());
 
-      if (apiKey) {
-        formData.append('apiKey', apiKey);
-      }
-
       if (imageFile) {
         formData.append('input_reference', imageFile);
       }
 
-      const res = await fetch('/api/generate', {
+      const res = await fetch(VIDEO_API_BASE, {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
         body: formData,
       });
 
+      const data = await res
+        .json()
+        .catch(() => ({ error: { message: '動画生成レスポンスの解析に失敗しました' } }));
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || '動画生成に失敗しました');
+        const message =
+          (data as any)?.error?.message ||
+          `動画生成に失敗しました (${res.status})`;
+        throw new Error(message);
       }
 
-      const { videoId: newVideoId } = await res.json();
+      const newVideoId = (data as any)?.id;
+      if (!newVideoId) {
+        throw new Error('動画IDを取得できませんでした');
+      }
+
       setVideoId(newVideoId);
-      await pollStatus(newVideoId, apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
+      await pollStatus(newVideoId, apiKey);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || '動画生成中にエラーが発生しました');
       setLoading(false);
+    }
+  };
+
+  const downloadAsset = async (
+    variant: 'mp4' | 'thumbnail' | 'spritesheet'
+  ) => {
+    if (!videoId) {
+      return;
+    }
+
+    if (!apiKey) {
+      setError('ダウンロードにはAPIキーが必要です');
+      return;
+    }
+
+    try {
+      const query = variant === 'mp4' ? '' : `?variant=${variant}`;
+      const res = await fetch(`${VIDEO_API_BASE}/${videoId}/content${query}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`コンテンツの取得に失敗しました (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const extension =
+        variant === 'mp4' ? 'mp4' : variant === 'thumbnail' ? 'webp' : 'jpg';
+      const filename =
+        variant === 'mp4'
+          ? `${videoId}.mp4`
+          : `${videoId}_${variant}.${extension}`;
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || 'コンテンツのダウンロードに失敗しました');
     }
   };
 
@@ -223,8 +297,9 @@ export default function Home() {
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="環境変数がない場合はここに入力"
+                placeholder="OpenAIのAPIキーを入力してください"
               />
             </div>
 
@@ -349,6 +424,13 @@ export default function Home() {
               </div>
             </div>
 
+            <div>
+              <p className="mt-1 text-xs text-red-600">
+                このツールはブラウザから直接OpenAI APIへリクエストを送信します。<br />
+                利用に伴う費用や結果、生成失敗・ダウンロード不可を含む一切の事象について開発者は責任を負いません。
+              </p>
+            </div>
+
             <button
               type="submit"
               disabled={loading || !prompt}
@@ -411,49 +493,19 @@ export default function Home() {
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={async () => {
-                        const key = apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
-                        const res = await fetch(`/api/download?videoId=${videoId}&apiKey=${encodeURIComponent(key)}&variant=mp4`);
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${videoId}.mp4`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
+                      onClick={() => downloadAsset('mp4')}
                       className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       📹 動画をダウンロード
                     </button>
                     <button
-                      onClick={async () => {
-                        const key = apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
-                        const res = await fetch(`/api/download?videoId=${videoId}&apiKey=${encodeURIComponent(key)}&variant=thumbnail`);
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${videoId}_thumbnail.webp`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
+                      onClick={() => downloadAsset('thumbnail')}
                       className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
                     >
                       🖼️ サムネイルをダウンロード
                     </button>
                     <button
-                      onClick={async () => {
-                        const key = apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
-                        const res = await fetch(`/api/download?videoId=${videoId}&apiKey=${encodeURIComponent(key)}&variant=spritesheet`);
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${videoId}_spritesheet.jpg`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
+                      onClick={() => downloadAsset('spritesheet')}
                       className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
                     >
                       🎞️ スプライトシートをダウンロード
